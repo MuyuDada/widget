@@ -1,0 +1,696 @@
+<style>
+    @import url("https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.7.0/lxgwwenkaiscreen.css");
+
+    html {
+        --font_stack: "LXGW WenKai Screen", "LXGW WenKai", "PingFang SC",
+            "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    html[data-bg="dark"] {
+        --text: #eef2f8;
+        --text-sub: #c2ccdb;
+        --text-strong: #ffffff;
+        --accent: #bcd6ff;
+        --line: rgba(148, 163, 184, 0.42);
+        --surface: rgba(120, 132, 152, 0.22);
+        --surface-hover: rgba(120, 132, 152, 0.34);
+        --accent_dim: rgba(140, 170, 220, 0.22);
+        --divider_color: rgba(148, 163, 184, 0.40);
+        --glyph_bg: rgba(255, 255, 255, 0.16);
+    }
+
+    html[data-bg="light"] {
+        --text: #2b3240;
+        --text-sub: #5c677a;
+        --text-strong: #10151f;
+        --accent: #2b5aa8;
+        --line: rgba(43, 50, 64, 0.22);
+        --surface: rgba(255, 255, 255, 0.62);
+        --surface-hover: rgba(255, 255, 255, 0.94);
+        --accent_dim: rgba(90, 130, 200, 0.16);
+        --divider_color: rgba(43, 50, 64, 0.18);
+        --glyph_bg: rgba(0, 0, 0, 0.07);
+    }
+
+    .left-div {
+        box-sizing: border-box;
+        flex-shrink: 0;
+        width: 100%;
+        margin-top: 15px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface);
+        color: var(--text);
+        font-family: var(--font_stack);
+        -webkit-font-smoothing: antialiased;
+        transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    body>.left-div {
+        max-width: 340px;
+        margin: 24px auto;
+    }
+
+    .time-heading,
+    .weather-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 26px;
+    }
+
+    .time-weather-title {
+        color: var(--accent);
+        font-size: 13px;
+        letter-spacing: 0.4px;
+    }
+
+    .time-period {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--accent_dim);
+        color: var(--accent);
+        font-size: 11px;
+        letter-spacing: 1px;
+    }
+
+    .time-period-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: timePeriodPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes timePeriodPulse {
+
+        0%,
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.35;
+            transform: scale(0.7);
+        }
+    }
+
+    .local-time {
+        display: flex;
+        align-items: baseline;
+        margin-top: 6px;
+        font-size: 31px;
+        line-height: 1.15;
+        letter-spacing: 1px;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-feature-settings: "tnum" 1;
+        font-feature-settings: "tnum" 1;
+    }
+
+    #local-time-main {
+        color: var(--text-strong);
+    }
+
+    .local-time-seconds {
+        margin-left: 2px;
+        color: var(--accent);
+        font-size: 15px;
+        opacity: 0.9;
+    }
+
+    .local-date {
+        margin-top: 5px;
+        color: var(--text-sub);
+        font-size: 12px;
+        letter-spacing: 0.5px;
+    }
+
+    .weather-divider {
+        height: 1px;
+        margin: 14px 0;
+        background: linear-gradient(90deg,
+                rgba(148, 163, 184, 0) 0%,
+                var(--divider_color) 20%,
+                var(--divider_color) 80%,
+                rgba(148, 163, 184, 0) 100%);
+    }
+
+    .weather-location {
+        margin-top: 8px;
+        color: var(--text-sub);
+        font-size: 11px;
+        letter-spacing: 0.3px;
+    }
+
+    .weather-info {
+        margin-top: 9px;
+    }
+
+    .weather-info.is-muted {
+        margin-top: 10px;
+        color: var(--text-sub);
+        font-size: 12px;
+    }
+
+    .weather-main {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--accent);
+        font-size: 14px;
+    }
+
+    .weather-main .weather-icon {
+        width: 30px;
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+            var(--font_stack);
+        font-size: 26px;
+        line-height: 1;
+    }
+
+    .weather-main strong {
+        font-size: 27px;
+        font-weight: 600;
+        color: var(--text-strong);
+        letter-spacing: -0.5px;
+    }
+
+    .weather-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: transparent;
+        color: var(--text-sub);
+        opacity: 0.85;
+        cursor: pointer;
+        transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    }
+
+    .weather-toggle:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: var(--surface-hover);
+        opacity: 1;
+    }
+
+    .weather-toggle-icon {
+        display: block;
+        width: 19px;
+        height: 19px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        transition: transform 0.25s ease;
+    }
+
+    .weather-toggle[aria-expanded="true"] .weather-toggle-icon {
+        transform: rotate(180deg);
+    }
+
+    .weather-forecast {
+        display: grid;
+        gap: 6px;
+        max-height: 680px;
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+        overflow: hidden;
+        opacity: 1;
+        transform: translateY(0);
+        transition: max-height 0.32s ease, opacity 0.24s ease, transform 0.32s ease, margin 0.32s ease, padding 0.32s ease;
+    }
+
+    .weather-forecast.weather-forecast-collapsed {
+        max-height: 0;
+        margin-top: 0;
+        padding-top: 0;
+        border-top-width: 0;
+        opacity: 0;
+        transform: translateY(-8px);
+        pointer-events: none;
+    }
+
+    .weather-detail-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 3px;
+        color: var(--text-strong);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+    }
+
+    .weather-detail-heading span {
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: normal;
+    }
+
+    .air-quality-title {
+        margin: 12px 0 6px;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+    }
+
+    .weather-detail-grid,
+    .pollutant-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px;
+    }
+
+    .weather-detail-grid>div {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 26px;
+        padding: 3px 6px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .weather-detail-grid>div:hover {
+        border-color: var(--accent);
+        background: var(--surface-hover);
+    }
+
+    .weather-detail-card>i {
+        display: inline-flex;
+        flex: 0 0 24px;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        background: var(--glyph_bg);
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+            var(--font_stack);
+        font-size: 13px;
+        font-style: normal;
+        line-height: 1;
+    }
+
+    .weather-detail-card b {
+        color: var(--text);
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+        letter-spacing: -0.2px;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-feature-settings: "tnum" 1;
+        font-feature-settings: "tnum" 1;
+    }
+
+    .weather-detail-card>span {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .weather-detail-card em {
+        color: var(--text-sub);
+        font-size: 9px;
+        font-style: normal;
+        letter-spacing: 0.3px;
+    }
+
+    .pollutant-grid span {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--pollutant_color, var(--line));
+        border-radius: 11px;
+        color: var(--text-sub);
+        font-size: 9px;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .pollutant-grid span:hover {
+        background: var(--surface-hover);
+    }
+
+    .pollutant-grid i {
+        color: var(--text);
+        font-style: normal;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+    }
+
+    .pollutant-grid b {
+        color: var(--text-sub);
+        font-size: 9px;
+        font-weight: normal;
+        text-align: right;
+        white-space: nowrap;
+        letter-spacing: -0.2px;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-feature-settings: "tnum" 1;
+        font-feature-settings: "tnum" 1;
+    }
+
+    .pollutant-pm25 {
+        --pollutant_color: #e0643a;
+    }
+
+    .pollutant-pm10 {
+        --pollutant_color: #c48f1c;
+    }
+
+    .pollutant-o3 {
+        --pollutant_color: #189a91;
+    }
+
+    .pollutant-no2 {
+        --pollutant_color: #7358d6;
+    }
+
+    .pollutant-so2 {
+        --pollutant_color: #c9387e;
+    }
+
+    .pollutant-co {
+        --pollutant_color: #64748b;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .time-period-dot {
+            animation: none;
+        }
+    }
+</style>
+
+<div class="left-div time-weather-card">
+    <div class="time-heading">
+        <div class="time-weather-title">当地时间</div>
+        <span id="time-period" class="time-period"><i class="time-period-dot" aria-hidden="true"></i>--</span>
+    </div>
+    <div class="local-time"><span id="local-time-main">--:--</span><span id="local-time-seconds"
+            class="local-time-seconds">:--</span></div>
+    <div id="local-date" class="local-date">正在获取日期...</div>
+    <div class="weather-divider"></div>
+    <div class="weather-heading">
+        <div class="time-weather-title">天气预报</div>
+        <button id="weather-toggle" class="weather-toggle" type="button" aria-expanded="false" aria-label="展开今日天气详情"
+            title="展开今日天气详情">
+            <svg class="weather-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3a6 6 0 0 1 5.65 4H18a4 4 0 1 1 0 8H7a5 5 0 1 1 1.1-9.88A6 6 0 0 1 12 3Z">
+                </path>
+                <path d="m8 18 4 3 4-3"></path>
+            </svg>
+        </button>
+    </div>
+    <div id="weather-location" class="weather-location">正在定位...</div>
+    <div id="weather-info" class="weather-info" aria-live="polite">正在获取天气...</div>
+    <div id="weather-forecast" class="weather-forecast"></div>
+</div>
+
+<script>
+    var weatherConfig = {
+        city: "石家庄",
+        latitude: 38.0428,
+        longitude: 114.5149,
+        apiHost: "https://api.open-meteo.com",
+        airQualityApiHost: "https://air-quality-api.open-meteo.com",
+        ipApi: "https://v2.xxapi.cn/api/ip"
+    };
+
+    function detectBackground() {
+        var node = document.querySelector(".left-div");
+        node = node ? node.parentElement : document.body;
+        var chain = [];
+
+        while (node) {
+            chain.push(node);
+            if (node === document.documentElement) break;
+            node = node.parentElement;
+        }
+
+        for (var i = 0; i < chain.length; i++) {
+            var bg = window.getComputedStyle(chain[i]).backgroundColor || "";
+            var match = bg.match(/rgba?\(([^)]+)\)/i);
+            if (!match) continue;
+            var parts = match[1].split(",").map(parseFloat);
+            var alpha = parts.length > 3 ? parts[3] : 1;
+            if (!(alpha > 0.05)) continue;
+            var luminance = (0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]) / 255;
+            return chromaticThreshold(luminance);
+        }
+        return "light";
+    }
+
+    function chromaticThreshold(luminance) {
+        return luminance > 0.52 ? "light" : "dark";
+    }
+
+    function applyBackground() {
+        document.documentElement.setAttribute("data-bg", detectBackground());
+    }
+
+    function timePeriodText(hour) {
+        if (hour < 5) return "凌晨";
+        if (hour < 9) return "早上";
+        if (hour < 12) return "上午";
+        if (hour < 14) return "中午";
+        if (hour < 18) return "下午";
+        if (hour < 19) return "傍晚";
+        return "晚上";
+    }
+
+    function updateLocalTime() {
+        var timeElement = document.getElementById("local-time-main");
+        var dateElement = document.getElementById("local-date");
+        if (!timeElement || !dateElement) return;
+
+        var secondsElement = document.getElementById("local-time-seconds");
+        var periodElement = document.getElementById("time-period");
+        var pad = function (value) { return String(value).padStart(2, "0"); };
+        var now = new Date();
+
+        timeElement.textContent = pad(now.getHours()) + ":" + pad(now.getMinutes());
+        if (secondsElement) secondsElement.textContent = ":" + pad(now.getSeconds());
+        if (periodElement) {
+            periodElement.innerHTML = '<i class="time-period-dot" aria-hidden="true"></i>' +
+                timePeriodText(now.getHours());
+        }
+        dateElement.textContent = now.toLocaleDateString("zh-CN", {
+            year: "numeric", month: "long", day: "numeric", weekday: "long"
+        });
+    }
+    var WEATHER_TEXT = {
+        0: "晴", 1: "大部晴朗", 2: "局部多云", 3: "阴",
+        45: "雾", 48: "雾凇",
+        51: "小毛毛雨", 53: "毛毛雨", 55: "大毛毛雨",
+        61: "小雨", 63: "中雨", 65: "大雨",
+        71: "小雪", 73: "中雪", 75: "大雪",
+        80: "小阵雨", 81: "阵雨", 82: "强阵雨",
+        95: "雷雨", 96: "雷雨伴冰雹", 99: "强雷雨伴冰雹"
+    };
+
+    function weatherText(code) { return WEATHER_TEXT[code] || "天气未知"; }
+
+    function weatherIcon(code) {
+        if (code === 0) return "☀️";
+        if (code === 1 || code === 2) return "🌤️";
+        if (code === 3) return "☁️";
+        if (code === 45 || code === 48) return "🌫️";
+        if (code >= 51 && code <= 67) return "🌧️";
+        if (code >= 71 && code <= 77) return "🌨️";
+        if (code >= 80 && code <= 82) return "🌦️";
+        if (code >= 95) return "⛈️";
+        return "🌡️";
+    }
+
+    function windDirection(degrees) {
+        var directions = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"];
+        return directions[Math.round(degrees / 45) % 8];
+    }
+
+    function windLevel(speed) {
+        var limits = [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118];
+        for (var i = 0; i < limits.length; i++) {
+            if (speed < limits[i]) return i;
+        }
+        return 12;
+    }
+
+    function formatWeatherTime(value) { return value ? value.slice(11, 16) : "--:--"; }
+    function formatAirValue(value) { return value == null ? "暂无数据" : Math.round(value) + " μg/m³"; }
+    function formatPm25(value) { return value == null ? "暂无数据" : "PM2.5 " + Math.round(value); }
+
+    function fetchJson(url) {
+        return fetch(url).then(function (response) {
+            if (!response.ok) throw new Error("请求失败 " + response.status + "：" + url);
+            return response.json();
+        });
+    }
+
+    function loadAirQuality(latitude, longitude) {
+        var url = weatherConfig.airQualityApiHost.replace(/\/+$/, "") +
+            "/v1/air-quality?latitude=" + latitude + "&longitude=" + longitude +
+            "&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=auto";
+
+        return fetchJson(url)
+            .then(function (data) { return data.current || {}; })
+            .catch(function (error) { console.error(error); return {}; });
+    }
+
+    function renderCurrent(current) {
+        var weatherElement = document.getElementById("weather-info");
+        if (!weatherElement) return;
+        weatherElement.classList.remove("is-muted");
+        weatherElement.innerHTML =
+            '<div class="weather-main"><span class="weather-icon">' +
+            weatherIcon(current.weather_code) + "</span><strong>" +
+            Math.round(current.temperature_2m) + "°</strong><span>" +
+            weatherText(current.weather_code) + "</span></div>";
+    }
+
+    function renderForecast(current, daily, air) {
+        var forecastElement = document.getElementById("weather-forecast");
+        if (!forecastElement) return;
+
+        var details = [
+            ["🌬️", "风力", windDirection(current.wind_direction_10m) + "风 " + windLevel(current.wind_speed_10m) + "级"],
+            ["👁️", "能见度", (current.visibility / 1000).toFixed(1) + " km"],
+            ["🌡️", "体感温度", Math.round(current.apparent_temperature) + "°"],
+            ["💧", "湿度", current.relative_humidity_2m + "%"],
+            ["⏱️", "气压", Math.round(current.pressure_msl) + " hPa"],
+            ["🍃", "空气质量", formatPm25(air.pm2_5)],
+            ["☁️", "云量", current.cloud_cover + "%"],
+            ["☀️", "紫外线", Number(current.uv_index).toFixed(1)],
+            ["🌧️", "降水量", Number(current.precipitation).toFixed(1) + " mm"],
+            ["☔", "降水概率", current.precipitation_probability + "%"],
+            ["🌅", "日出", formatWeatherTime((daily.sunrise || [])[0])],
+            ["🌇", "日落", formatWeatherTime((daily.sunset || [])[0])]
+        ];
+
+        var pollutants = [
+            ["pollutant-pm25", "PM2.5", air.pm2_5],
+            ["pollutant-pm10", "PM10", air.pm10],
+            ["pollutant-o3", "O₃", air.ozone],
+            ["pollutant-no2", "NO₂", air.nitrogen_dioxide],
+            ["pollutant-so2", "SO₂", air.sulphur_dioxide],
+            ["pollutant-co", "CO", air.carbon_monoxide]
+        ];
+
+        forecastElement.innerHTML =
+            '<div class="weather-detail-heading">今日天气详情<span>' +
+            weatherText(current.weather_code) + " " + weatherIcon(current.weather_code) + "</span></div>" +
+            '<div class="weather-detail-grid">' +
+            details.map(function (item) {
+                return '<div class="weather-detail-card"><i>' + item[0] + "</i><span><em>" + item[1] +
+                    "</em><b>" + item[2] + "</b></span></div>";
+            }).join("") +
+            "</div>" +
+            '<div class="air-quality-title">污染物浓度</div>' +
+            '<div class="pollutant-grid">' +
+            pollutants.map(function (item) {
+                return '<span class="' + item[0] + '"><i>' + item[1] + "</i><b>" +
+                    formatAirValue(item[2]) + "</b></span>";
+            }).join("") +
+            "</div>";
+    }
+
+    function loadWeather(latitude, longitude, locationName) {
+        var weatherElement = document.getElementById("weather-info");
+        var locationElement = document.getElementById("weather-location");
+        if (!weatherElement) return;
+
+        if (locationElement && locationName) locationElement.textContent = "⌖ " + locationName;
+
+        var query = new URLSearchParams({
+            latitude: latitude,
+            longitude: longitude,
+            current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,visibility,pressure_msl,cloud_cover,uv_index,precipitation,precipitation_probability",
+            daily: "sunrise,sunset",
+            forecast_days: "1",
+            timezone: "auto"
+        });
+
+        fetchJson(weatherConfig.apiHost.replace(/\/+$/, "") + "/v1/forecast?" + query.toString())
+            .then(function (data) {
+                if (!data || !data.current) throw new Error("天气接口返回内容无效");
+                renderCurrent(data.current);
+                return loadAirQuality(latitude, longitude).then(function (air) {
+                    renderForecast(data.current, data.daily || {}, air);
+                });
+            })
+            .catch(function (error) {
+                console.error(error);
+                weatherElement.textContent = "天气暂时无法获取";
+                weatherElement.classList.add("is-muted");
+            });
+    }
+    function loadLocalWeather() {
+        fetchJson(weatherConfig.ipApi)
+            .then(function (data) {
+                var location = data && data.data;
+                var latitude = Number(location && location.lat);
+                var longitude = Number(location && location.lng);
+                if (!data || data.code !== 200 || !location ||
+                    !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                    throw new Error("IP 定位返回内容无效");
+                }
+                loadWeather(latitude, longitude, location.address || location.ip);
+            })
+            .catch(function (error) {
+                console.error(error);
+                loadWeather(weatherConfig.latitude, weatherConfig.longitude, weatherConfig.city);
+            });
+    }
+
+    function initWeatherCard() {
+        applyBackground();
+        updateLocalTime();
+        window.setInterval(updateLocalTime, 1000);
+        loadLocalWeather();
+
+        var observer = new MutationObserver(applyBackground);
+        observer.observe(document.documentElement, {
+            attributes: true, attributeFilter: ["class", "style", "data-theme"]
+        });
+        if (document.body) {
+            observer.observe(document.body, {
+                attributes: true, attributeFilter: ["class", "style", "data-theme"]
+            });
+        }
+
+        var weatherToggle = document.getElementById("weather-toggle");
+        var weatherForecast = document.getElementById("weather-forecast");
+        if (!weatherToggle || !weatherForecast) return;
+
+        weatherForecast.classList.add("weather-forecast-collapsed");
+        weatherToggle.addEventListener("click", function () {
+            var expanded = weatherToggle.getAttribute("aria-expanded") === "true";
+            weatherToggle.setAttribute("aria-expanded", String(!expanded));
+            weatherForecast.classList.toggle("weather-forecast-collapsed", expanded);
+        });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initWeatherCard);
+    } else {
+        initWeatherCard();
+    }
+</script>
