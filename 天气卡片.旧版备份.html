@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="Light">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天气卡片 · Muyu</title>
+
+    <script>
+        // 首帧渲染前恢复用户主题，避免暗色用户看到白屏闪烁（与线上 index.html 一致）。
+        // file:// 下 cookie 不可用，所以优先读 localStorage，cookie 作为回退。
+        (function () {
+            try {
+                var saved = null;
+                try { saved = window.localStorage.getItem("themeState"); } catch (e) { }
+                if (!saved) {
+                    var match = document.cookie.match(/(?:^|;\s*)themeState=(Dark|Light)/);
+                    saved = match ? match[1] : null;
+                }
+                if (saved === "Dark" || saved === "Light") {
+                    document.documentElement.dataset.theme = saved;
+                }
+            } catch (error) { }
+        })();
+    </script>
+
+    <!-- ===================================================================
+         天气卡片单文件版
+         -------------------------------------------------------------------
+         从 muyudada.github.io 抽取「当地时间 + 天气预报」整块，CSS 与 JS 全部内联。
+         数据源：和风天气（QWeather）v1 接口，认证走 X-QW-Api-Key 请求头。
+
+         说明：
+         1. 字体与背景图用绝对 file:// 路径指向原仓库的 static/ 目录，
+            直接双击本文件即可还原线上效果；若移动了本文件或仓库位置，
+            改下面 @font-face 与 --main_bg_color 里的路径即可。
+         2. 主题切换按钮在右上角，逻辑与原站一致（写 cookie themeState）。
+         3. 定位链与线上完全一致：浏览器 GPS → IP 定位 → 兜底城市「涞源」。
+            从 file:// 打开时浏览器通常会拒绝 GPS，会自动降级到 IP 定位。
+         =================================================================== -->
+
+    <style>
+        /* ============================== 字体 ============================== */
+        /* 中文字体：woff2 为 GB2312 常用字子集，ttf 为完整回退 */
+        @font-face {
+            font-family: "a";
+            src: url("file:///C:/Users/27563/Desktop/HOME%20page/github/muyudada.github.io/static/fonts/LXGWZhenKai.subset.woff2") format("woff2"),
+                url("file:///C:/Users/27563/Desktop/HOME%20page/github/muyudada.github.io/static/fonts/LXGWZhenKai.ttf") format("truetype");
+            font-display: swap;
+        }
+
+        /* 英文正文字体：拉丁字符子集 */
+        @font-face {
+            font-family: "b";
+            src: url("file:///C:/Users/27563/Desktop/HOME%20page/github/muyudada.github.io/static/fonts/Ubuntu-Regular.woff2") format("woff2"),
+                url("file:///C:/Users/27563/Desktop/HOME%20page/github/muyudada.github.io/static/fonts/Ubuntu-Regular.ttf") format("truetype");
+            font-display: swap;
+        }
+
+        /* 标题手写体 */
+        @font-face {
+            font-family: "title";
+            src: url("file:///C:/Users/27563/Desktop/HOME%20page/github/muyudada.github.io/static/fonts/Pacifico-Regular.ttf");
+            font-display: swap;
+        }
+
+        /* ============================ 设计令牌 ============================ */
+        :root {
+            --font-cn: "a", "b", sans-serif;
+            --font-en: "b", "a", sans-serif;
+            --font-title: "title", cursive;
+
+            /* 圆角节奏 */
+            --r-xs: 8px;
+            --r-sm: 12px;
+            --r-md: 16px;
+            --r-lg: 20px;
+            --r-xl: 26px;
+            --r-pill: 999px;
+
+            /* 间距节奏 */
+            --sp-1: 6px;
+            --sp-2: 10px;
+            --sp-3: 14px;
+            --sp-4: 18px;
+            --sp-5: 24px;
+            --sp-6: 32px;
+
+            /* 动效 */
+            --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+            --ease-spring: cubic-bezier(0.34, 1.36, 0.5, 1);
+            --dur-fast: 0.18s;
+            --dur: 0.28s;
+            --dur-slow: 0.45s;
+        }
+
+        /* ============================ 亮色主题 ============================ */
+        html[data-theme="Light"] {
+            color-scheme: light;
+
+            --card-base-rgb: 239, 246, 252;
+            --backdrop-rgb: 255, 255, 255;
+            --background-opacity: 0.2;
+            --card-opacity: 0.62;
+            --card_filter: 12px;
+            --back_filter: 10px;
+
+            /* 文本层级 */
+            --main_text_color: #1e2c3f;
+            --item_left_title_color: #17253a;
+            --item_left_text_color: #4e5f75;
+            --footer_text_color: #3c4b60;
+            --fill: #2f4560;
+
+            /* 强调色 */
+            --purple_text_color: #5b6cff;
+            --gradient: linear-gradient(115deg, #7c5cff 0%, #ef4d94 38%, #35c2f8 72%);
+            --text_bg_color: rgba(122, 160, 232, 0.4);
+
+            /* 玻璃表面 */
+            --item_bg_color: rgba(var(--card-base-rgb), var(--card-opacity));
+            --item_hover_color: rgba(255, 255, 255, 0.8);
+            --left_tag_item: rgba(255, 255, 255, 0.62);
+            --glass-sheen:
+                radial-gradient(120% 130% at 8% -30%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 62%),
+                linear-gradient(165deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.2) 100%);
+            --glass-top: rgba(255, 255, 255, 0.9);
+            --glass-tint: rgba(255, 255, 255, 0.38);
+            --card-border: rgba(255, 255, 255, 0.7);
+            --card-border-soft: rgba(126, 156, 194, 0.22);
+            --hairline: rgba(84, 116, 158, 0.26);
+
+            /* 阴影层级 */
+            --card-shadow:
+                0 1px 2px rgba(23, 43, 74, 0.05),
+                0 10px 24px -12px rgba(23, 43, 74, 0.26),
+                0 28px 60px -34px rgba(23, 43, 74, 0.3);
+            --control-shadow:
+                0 1px 2px rgba(23, 43, 74, 0.08),
+                0 8px 18px -10px rgba(23, 43, 74, 0.32);
+            --hover-shadow:
+                0 2px 6px rgba(23, 43, 74, 0.08),
+                0 20px 40px -18px rgba(23, 43, 74, 0.36),
+                0 40px 80px -50px rgba(23, 43, 74, 0.3);
+
+            /* 背景与浮层 */
+            --scrim: linear-gradient(180deg, rgba(232, 240, 252, 0.44) 0%, rgba(206, 222, 244, 0.58) 100%);
+            --main_bg_color: var(--scrim),
+                url(https://t.alcy.cc/pc),
+                url("file:///C:/Users/27563/Desktop/HOME%20page/github/muyudada.github.io/static/img/background.jpg");
+            --modal-bg: rgba(255, 255, 255, 0.94);
+            --modal-shadow: 0 30px 80px -20px rgba(23, 43, 74, 0.45);
+            --scrollbar-thumb: rgba(84, 116, 158, 0.35);
+        }
+
+        /* ============================ 暗色主题 ============================ */
+        html[data-theme="Dark"] {
+            color-scheme: dark;
+
+            --card-base-rgb: 24, 30, 42;
+            --backdrop-rgb: 8, 12, 20;
+            --background-opacity: 0.38;
+            --card-opacity: 0.78;
+            --card_filter: 18px;
+            --back_filter: 12px;
+
+            /* 文本层级 */
+            --main_text_color: #eef3fb;
+            --item_left_title_color: #ffffff;
+            --item_left_text_color: #a6b5c9;
+            --footer_text_color: #8b99ac;
+            --fill: #f4f8ff;
+
+            /* 强调色 */
+            --purple_text_color: #8f9dff;
+            --gradient: linear-gradient(115deg, #9b6bff 0%, #ff77c8 40%, #7fe4ff 74%);
+            --text_bg_color: rgba(116, 130, 255, 0.28);
+
+            /* 玻璃表面 */
+            --item_bg_color: rgba(var(--card-base-rgb), var(--card-opacity));
+            --item_hover_color: rgba(255, 255, 255, 0.12);
+            --left_tag_item: rgba(255, 255, 255, 0.12);
+            --glass-sheen:
+                radial-gradient(120% 130% at 8% -30%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 60%),
+                linear-gradient(165deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 50%, rgba(255, 255, 255, 0.05) 100%);
+            --glass-top: rgba(255, 255, 255, 0.16);
+            --glass-tint: rgba(255, 255, 255, 0.04);
+            --card-border: rgba(255, 255, 255, 0.14);
+            --card-border-soft: rgba(255, 255, 255, 0.08);
+            --hairline: rgba(255, 255, 255, 0.12);
+
+            /* 阴影层级 */
+            --card-shadow:
+                0 1px 2px rgba(0, 0, 0, 0.4),
+                0 14px 32px -14px rgba(0, 0, 0, 0.6),
+                0 34px 70px -40px rgba(0, 0, 0, 0.7);
+            --control-shadow:
+                0 1px 2px rgba(0, 0, 0, 0.4),
+                0 10px 22px -12px rgba(0, 0, 0, 0.6);
+            --hover-shadow:
+                0 2px 6px rgba(0, 0, 0, 0.4),
+                0 22px 44px -18px rgba(0, 0, 0, 0.66),
+                0 46px 90px -50px rgba(0, 0, 0, 0.8);
+
+            /* 背景与浮层 */
+            --scrim: linear-gradient(180deg, rgba(4, 8, 16, 0.52) 0%, rgba(3, 6, 12, 0.7) 100%);
+            --main_bg_color: var(--scrim),
+                url(https://t.alcy.cc/pc),
+                url("file:///C:/Users/27563/Desktop/HOME%20page/github/muyudada.github.io/static/img/background.jpg");
+            --modal-bg: rgba(20, 26, 38, 0.94);
+            --modal-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
+            --scrollbar-thumb: rgba(255, 255, 255, 0.28);
+        }
+
+        /* ============================ 基础重置 ============================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            transition: background-color 0.2s ease;
+        }
+
+        a:hover,
+        a:link,
+        a:visited,
+        a:active,
+        a:focus {
+            text-decoration: none;
+            outline: none;
+            color: inherit;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+        }
+
+        /* 滚动条：全局隐藏 */
+        html {
+            scrollbar-width: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 0px;
+        }
+
+        ::selection {
+            background: color-mix(in srgb, var(--purple_text_color) 40%, transparent);
+            color: var(--main_text_color);
+        }
+
+        body {
+            height: 100%;
+            min-height: 100vh;
+            width: 100%;
+            position: relative;
+            font-family: var(--font-en);
+            background: var(--main_bg_color);
+            background-repeat: no-repeat;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: var(--main_text_color);
+            transition: color var(--dur-fast) ease;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        /* ====================== 背景遮罩与整体框架 ====================== */
+        .zyyo-filter {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(var(--backdrop-rgb), var(--background-opacity));
+            backdrop-filter: blur(var(--back_filter)) saturate(140%);
+            -webkit-backdrop-filter: blur(var(--back_filter)) saturate(140%);
+            z-index: -99999999;
+        }
+
+        .zyyo-main {
+            width: 100%;
+            max-width: 1180px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: row;
+            position: relative;
+            transition: transform 0.5s ease;
+        }
+
+        /* --------------------------- 左侧栏 --------------------------- */
+        .zyyo-left {
+            flex: 0 0 288px;
+            width: 288px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--sp-3);
+            padding: 40px var(--sp-3) var(--sp-5);
+            position: sticky;
+            top: 0;
+            left: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        .zyyo-left::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* ====================== 玻璃卡片（统一配方） ====================== */
+        .left-div {
+            background-color: var(--item_bg_color);
+            background-image: var(--glass-sheen);
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(var(--card_filter)) saturate(160%);
+            -webkit-backdrop-filter: blur(var(--card_filter)) saturate(160%);
+            box-shadow: var(--card-shadow), inset 0 1px 0 var(--glass-top);
+        }
+
+        .left-div {
+            flex-shrink: 0;
+            width: 100%;
+            padding: var(--sp-4);
+            border-radius: var(--r-md);
+            transition: box-shadow var(--dur) var(--ease-out),
+                transform var(--dur) var(--ease-out),
+                background-color var(--dur-fast) ease;
+        }
+
+        /* ====================== 时间 / 天气卡片 ====================== */
+        .time-weather-card {
+            padding: var(--sp-4);
+        }
+
+        .time-weather-title {
+            color: var(--purple_text_color);
+            font-size: 12.5px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+        }
+
+        .time-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 26px;
+        }
+
+        .time-period {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: var(--r-pill);
+            background: color-mix(in srgb, var(--purple_text_color) 16%, transparent);
+            border: 1px solid color-mix(in srgb, var(--purple_text_color) 22%, transparent);
+            color: var(--purple_text_color);
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+
+        .time-period-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: timePeriodPulse 2s ease-in-out infinite;
+        }
+
+        .local-time {
+            display: flex;
+            align-items: baseline;
+            margin-top: var(--sp-1);
+            color: var(--main_text_color);
+            font-family: var(--font-cn);
+            font-size: 32px;
+            line-height: 1.15;
+            letter-spacing: 1px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .local-time-seconds {
+            margin-left: 2px;
+            color: var(--purple_text_color);
+            font-size: 15px;
+            opacity: 0.9;
+        }
+
+        .local-date {
+            margin-top: 5px;
+            color: var(--item_left_text_color);
+            font-size: 12px;
+            font-family: var(--font-cn);
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes timePeriodPulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.3;
+                transform: scale(0.7);
+            }
+        }
+
+        .weather-divider {
+            height: 1px;
+            margin: var(--sp-3) 0;
+            background: var(--hairline);
+        }
+
+        .weather-info {
+            margin-top: var(--sp-2);
+        }
+
+        .weather-location {
+            margin-top: var(--sp-1);
+            color: var(--item_left_text_color);
+            font-size: 12px;
+        }
+
+        .weather-main {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-1);
+            font-size: 14px;
+            font-family: var(--font-cn) !important;
+        }
+
+        .weather-main .weather-icon {
+            width: 30px;
+            font-size: 26px;
+            line-height: 1;
+        }
+
+        .weather-main strong {
+            font-size: 27px;
+            font-weight: normal;
+        }
+
+        .weather-info.is-muted {
+            margin-top: var(--sp-2);
+            color: var(--item_left_text_color);
+            font-size: 12px;
+        }
+
+        .weather-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 26px;
+        }
+
+        .weather-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border: 0;
+            border-radius: 50%;
+            padding: 0;
+            color: var(--item_left_text_color);
+            background: transparent;
+            cursor: pointer;
+            opacity: 0.75;
+            transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease,
+                opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+        }
+
+        .weather-toggle:hover {
+            color: var(--purple_text_color);
+            background: var(--item_hover_color);
+            opacity: 1;
+        }
+
+        .weather-toggle-icon {
+            display: block;
+            width: 19px;
+            height: 19px;
+            fill: none;
+            stroke: currentColor;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 1.6;
+            transition: transform 0.25s ease;
+        }
+
+        .weather-toggle[aria-expanded="true"] .weather-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .weather-forecast {
+            display: grid;
+            max-height: 560px;
+            overflow: hidden;
+            gap: 5px;
+            margin-top: var(--sp-2);
+            padding-top: var(--sp-2);
+            border-top: 1px solid var(--hairline);
+            opacity: 1;
+            transform: translateY(0);
+            transition: max-height 0.32s var(--ease-out), opacity 0.24s ease,
+                transform 0.32s var(--ease-out), margin 0.32s ease, padding 0.32s ease;
+        }
+
+        .weather-forecast.weather-forecast-collapsed {
+            max-height: 0;
+            margin-top: 0;
+            padding-top: 0;
+            border-top-width: 0;
+            opacity: 0;
+            transform: translateY(-8px);
+            pointer-events: none;
+        }
+
+        .weather-detail-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3px;
+            color: var(--main_text_color);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .weather-detail-heading span {
+            color: var(--item_left_text_color);
+            font-size: 10px;
+            font-weight: normal;
+        }
+
+        /* 数据来源说明：位于整块天气详情的最下方。
+           和风要求标注来源，但 attributions 给的是长 URL，
+           必须允许任意位置断行，否则会撑破 222px 的卡片宽度。 */
+        .weather-station-note {
+            text-align: center;
+            margin-top: var(--sp-2);
+            padding: 4px 7px;
+            border-radius: var(--r-xs);
+            background: var(--item_hover_color);
+            border: 1px solid var(--card-border-soft);
+            color: var(--item_left_text_color);
+            font-size: 10px;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .weather-station-note a {
+            color: var(--purple_text_color);
+            text-decoration: none;
+        }
+
+        .weather-station-note a:hover {
+            text-decoration: underline;
+        }
+
+        .weather-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px;
+        }
+
+        .weather-detail-grid>div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            min-height: 26px;
+            padding: 3px 6px;
+            border-radius: var(--r-xs);
+            background: var(--item_hover_color);
+            border: 1px solid var(--card-border-soft);
+        }
+
+        .weather-detail-card>i {
+            display: inline-flex;
+            flex: 0 0 23px;
+            align-items: center;
+            justify-content: center;
+            width: 23px;
+            height: 23px;
+            border-radius: var(--r-xs);
+            background: color-mix(in srgb, var(--purple_text_color) 18%, transparent);
+            font-size: 13px;
+            font-style: normal;
+        }
+
+        .weather-detail-card>span {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .weather-detail-card em {
+            color: var(--item_left_text_color);
+            font-size: 9px;
+            font-style: normal;
+        }
+
+        .weather-detail-card b {
+            color: var(--main_text_color);
+            font-size: 9px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .air-quality-title {
+            margin: var(--sp-2) 0 5px;
+            color: var(--main_text_color);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .pollutant-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px;
+        }
+
+        .pollutant-grid span {
+            display: flex;
+            justify-content: space-between;
+            gap: 4px;
+            padding: 5px 6px;
+            border: 1px solid var(--card-border-soft);
+            border-radius: var(--r-xs);
+            background: var(--item_hover_color);
+            color: var(--item_left_text_color);
+            font-size: 9px;
+        }
+
+        .pollutant-grid i {
+            color: var(--main_text_color);
+            font-style: normal;
+            font-weight: 600;
+        }
+
+        .pollutant-grid b {
+            color: var(--item_left_text_color);
+            font-size: 8px;
+            font-weight: normal;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .time-weather-title #weather-location {
+            color: var(--item_left_text_color);
+            font-size: 11px;
+            font-weight: normal;
+        }
+
+        /* ============================ 演示页专用 ============================ */
+        /* 线上原站在窄屏会隐藏整个左栏（.zyyo-left { display: none }），
+           这里只有一个卡片，隐藏就没东西可看了，所以改为缩小尺寸。 */
+        @media (max-width: 800px) {
+            .zyyo-main {
+                justify-content: center;
+            }
+
+            .zyyo-left {
+                flex: 1 1 auto;
+                width: 100%;
+                max-width: 320px;
+                padding: var(--sp-4) var(--sp-3);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .local-time {
+                font-size: 28px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .time-period-dot {
+                animation: none;
+            }
+
+            *,
+            *::before,
+            *::after {
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* 主题切换按钮 */
+        #demo-theme-toggle {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 10;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 34px;
+            padding: 0 14px;
+            border: 1px solid var(--card-border);
+            border-radius: var(--r-pill);
+            background-color: var(--item_bg_color);
+            background-image: var(--glass-sheen);
+            backdrop-filter: blur(var(--card_filter)) saturate(160%);
+            -webkit-backdrop-filter: blur(var(--card_filter)) saturate(160%);
+            box-shadow: var(--card-shadow), inset 0 1px 0 var(--glass-top);
+            color: var(--main_text_color);
+            font-family: var(--font-cn);
+            font-size: 12px;
+            cursor: pointer;
+            transition: transform var(--dur-fast) var(--ease-out);
+        }
+
+        #demo-theme-toggle:hover {
+            transform: translateY(-1px);
+        }
+
+        #demo-theme-toggle i {
+            font-style: normal;
+            font-size: 14px;
+        }
+
+        /* 窄屏时卡片顶到右上角，按钮移到底部，避免遮挡「下午」时段徽标 */
+        @media (max-width: 800px) {
+            #demo-theme-toggle {
+                top: auto;
+                bottom: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="zyyo-filter"></div>
+
+    <button id="demo-theme-toggle" type="button" title="切换明暗主题">
+        <i id="demo-theme-icon">🌙</i><span id="demo-theme-label">暗色</span>
+    </button>
+
+    <div class="zyyo-main">
+        <div class="zyyo-left">
+
+            <!-- ==================== 时间 / 天气卡片 ==================== -->
+            <div class="left-div time-weather-card">
+                <div class="time-heading">
+                    <div class="time-weather-title">当地时间</div>
+                    <span id="time-period" class="time-period"><i class="time-period-dot"
+                            aria-hidden="true"></i>--</span>
+                </div>
+                <div class="local-time"><span id="local-time-main">--:--</span><span id="local-time-seconds"
+                        class="local-time-seconds">:--</span></div>
+                <div id="local-date" class="local-date">正在获取日期...</div>
+                <div class="weather-divider"></div>
+                <div class="weather-heading">
+                    <div class="time-weather-title">天气预报</div>
+                    <button id="weather-toggle" class="weather-toggle" type="button" aria-expanded="false"
+                        aria-label="展开今日天气详情" title="展开今日天气详情">
+                        <svg class="weather-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 3a6 6 0 0 1 5.65 4H18a4 4 0 1 1 0 8H7a5 5 0 1 1 1.1-9.88A6 6 0 0 1 12 3Z">
+                            </path>
+                            <path d="m8 18 4 3 4-3"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="weather-location" class="weather-location">正在定位...</div>
+                <div id="weather-info" class="weather-info" aria-live="polite">正在获取天气...</div>
+                <div id="weather-forecast" class="weather-forecast" hidden></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        /* ===================================================================
+           天气数据来自和风天气（QWeather），需要 API Key。
+           =================================================================== */
+        // 天气数据来自和风天气（QWeather），需要 API Key，见下方 weatherConfig 末尾。
+        //
+        // 【定位策略】weatherConfig.locationMode
+        //   "auto"  —— 默认。定位访问者所在地：浏览器 GPS（带跑偏校验）→ IP 定位 → 兜底城市。
+        //   "fixed" —— 不做任何定位，永远显示下面写死的兜底城市。
+        //
+        // 关于定位可靠性（踩过的坑，别改回去）：
+        //   1) 浏览器 GPS 在电脑端其实是 WiFi 定位库，经常偏到隔壁市 → 用 maxAutoDistanceKm 校验；
+        //   2) 国内宽带 IP 归属地会跨市漂移，实测同一个 IP 被不同 IP 库分别解析成
+        //      涞源 / 保定 / 石家庄 / 承德，跨度 300 km → 所以地名只用于「显示」，
+        //      取数一律用 IP 库返回的经纬度，不用地名反查坐标；
+        //   3) 中文地名库不可靠（「保定」会命中云南的一个村，「涞源县」查不到），
+        //      绝不要用城市名反查坐标；和风 v1 也是直接吃经纬度，同样不需要反查；
+        //   4) 定位类接口偶尔会挂住不返回 → 必须有超时，否则页面永远停在「正在定位...」。
+        //
+        // fallback* 是「所有定位手段都失败」时的兜底坐标，也是 fixed 模式使用的坐标。
+        var weatherConfig = {
+            locationMode: "auto",
+            fallbackCity: "涞源",
+            fallbackLatitude: 39.3602,
+            fallbackLongitude: 114.6940,
+            // 定位点离兜底城市超过该公里数即判定为跑偏，继续往下一级回退
+            maxAutoDistanceKm: 80,
+            // 单个定位/天气请求的超时（毫秒），避免页面一直卡在「正在定位...」
+            requestTimeoutMs: 8000,
+            // 整个定位链的总时限（毫秒）。多级回退是串行的，
+            // 若每个源都挂住不返回，累加会把「正在定位...」拖到十几秒，所以必须封顶。
+            locationDeadlineMs: 6000,
+            // 天气自动刷新间隔（分钟）；切回前台时若已过期也会立即刷新
+            refreshIntervalMinutes: 15,
+            // 备用 IP 定位源：主源失败或返回坐标明显跑偏时依次尝试（都必须支持 CORS 跨域）
+            // 注意：ip-api.com 的 HTTPS 需付费、ipinfo.io 免费额度有限，故未启用
+            ipApis: [
+                "https://v2.xxapi.cn/api/ip",
+                "https://whois.pconline.com.cn/ipJson.jsp?json=true"
+            ],
+
+            // ===================== 和风天气（QWeather）=====================
+            // 认证必须走请求头 X-QW-Api-Key；旧的 ?key= 查询参数已废弃。
+            // API Host 是每个账号专属的，不是公共的 api.qweather.com
+            // （官方公告：公共地址自 2026 年起逐步停服），换账号时这两项都要改。
+            //
+            // ⚠️ 这是纯静态站点，Key 随仓库公开、任何人可见并可消耗你的额度。
+            //    如需保密，必须改成自建后端代理，把 Key 留在服务端。
+            qweatherApiKey: "88ae3e30712d4c7ea92e8b8b209949fb",
+            qweatherApiHost: "https://n27p3u5uhf.re.qweatherapi.com"
+        };
+
+        function timePeriodText(hour) {
+            if (hour < 5) {
+                return "凌晨";
+            }
+            if (hour < 9) {
+                return "早上";
+            }
+            if (hour < 12) {
+                return "上午";
+            }
+            if (hour < 14) {
+                return "中午";
+            }
+            if (hour < 18) {
+                return "下午";
+            }
+            if (hour < 19) {
+                return "傍晚";
+            }
+            return "晚上";
+        }
+
+        function updateLocalTime() {
+            var timeElement = document.getElementById("local-time-main");
+            var secondsElement = document.getElementById("local-time-seconds");
+            var periodElement = document.getElementById("time-period");
+            var dateElement = document.getElementById("local-date");
+
+            if (!timeElement || !dateElement) {
+                return;
+            }
+
+            var pad = function (value) {
+                return String(value).padStart(2, "0");
+            };
+            var now = new Date();
+
+            timeElement.textContent = pad(now.getHours()) + ":" + pad(now.getMinutes());
+            if (secondsElement) {
+                secondsElement.textContent = ":" + pad(now.getSeconds());
+            }
+            if (periodElement) {
+                periodElement.textContent = timePeriodText(now.getHours());
+            }
+            dateElement.textContent = now.toLocaleDateString("zh-CN", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                weekday: "long"
+            });
+        }
+
+        // ===================== 和风天气（QWeather）字段映射 =====================
+        // 和风 v1 的 condition.text 已经是本地化中文，直接展示即可；
+        // condition.code 只在挑图标时当兜底（官方图标代码见 dev.qweather.com/docs/resource/icons/）。
+        function weatherIconByText(text, code) {
+            var t = String(text || "");
+            if (/霾|浮尘|扬沙|沙尘/.test(t)) return "😷";
+            if (/雷/.test(t)) return "⛈️";
+            if (/雪|米雪/.test(t)) return "🌨️";
+            if (/雨/.test(t)) return "🌧️";
+            if (/雾/.test(t)) return "🌫️";
+            if (/阴/.test(t)) return "☁️";
+            if (/多云|少云/.test(t)) return "⛅";
+            if (/晴/.test(t)) return "☀️";
+            return weatherIconByCode(code);
+        }
+
+        // condition.code 兜底：按官方代码段归类
+        function weatherIconByCode(code) {
+            var n = parseInt(code, 10);
+            if (!Number.isFinite(n)) return "🌡️";
+            if ((n >= 100 && n <= 103) || (n >= 150 && n <= 153)) return "☀️";
+            if (n === 104) return "☁️";
+            if (n >= 200 && n <= 213) return "🌬️";
+            if (n >= 300 && n <= 399) return "🌧️";
+            if (n >= 400 && n <= 499) return "🌨️";
+            if (n >= 500 && n <= 515) return "🌫️";
+            return "🌡️";
+        }
+
+        function windDirection(degrees) {
+            var directions = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"];
+            return directions[Math.round(degrees / 45) % 8];
+        }
+
+        function formatWeatherTime(value) {
+            return value ? value.slice(11, 16) : "--:--";
+        }
+
+        function formatAirValue(value, unit) {
+            var num = Number(value);
+            if (value == null || !Number.isFinite(num)) {
+                return "暂无数据";
+            }
+            // CO 这类浓度很小（mg/m³），四舍五入会变成 0，所以小于 10 时保留一位小数
+            var text = num >= 10 ? String(Math.round(num)) : num.toFixed(1);
+            return text + " " + (unit || "μg/m³");
+        }
+
+        // 取当前天气现象的中文描述：和风直接给本地化文本
+        function currentWeatherText(current) {
+            return (current && current.condition && current.condition.text) || "天气未知";
+        }
+
+        // 天气现象对应的图标：先按中文关键字挑，挑不到再按 condition.code 归类
+        function currentWeatherIcon(current) {
+            var code = current && current.condition ? current.condition.code : null;
+            return weatherIconByText(currentWeatherText(current), code);
+        }
+
+        // 记录最近一次成功解析出的取数点，供定时刷新复用
+        var resolvedWeatherLocation = null;
+        var lastWeatherFetchAt = 0;
+
+        // 和风 API Host 是账号专属的，末尾可能带斜杠，统一去掉
+        function qweatherUrl(path) {
+            var host = String(weatherConfig.qweatherApiHost || "").replace(/\/+$/, "");
+            return host + path;
+        }
+
+        // 和风 v1 的数值字段统一是 { value, unit } 对象，取标量
+        function pickValue(node) {
+            if (node && typeof node === "object" && node.value !== undefined) {
+                return node.value;
+            }
+            return node;
+        }
+
+        // 判断取到的值是不是可用数字。
+        // 不能直接用 Number.isFinite(Number(v))：Number(null) 和 Number("") 都是 0，
+        // 会把「字段缺失」误判成真实的 0，详情卡片就会显示 0% / 0 hPa 这种假数据。
+        function isNum(value) {
+            return value !== null && value !== undefined && value !== "" &&
+                Number.isFinite(Number(value));
+        }
+
+        // 污染物浓度表：code -> { value, unit }。单位随污染物而变（CO 是 mg/m³，其余多为 μg/m³）
+        function airQualityMap(airData) {
+            var map = {};
+            var list = (airData && airData.pollutants) || [];
+            for (var i = 0; i < list.length; i++) {
+                var item = list[i];
+                if (!item || !item.code) {
+                    continue;
+                }
+                map[item.code] = {
+                    value: item.concentration ? item.concentration.value : null,
+                    unit: item.concentration ? item.concentration.unit : null
+                };
+            }
+            return map;
+        }
+
+        // 取 AQI：优先中国标准 cn-mee，没有就退到第一个指数
+        function airQualityIndex(airData) {
+            var list = (airData && airData.indexes) || [];
+            var chosen = null;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i] && list[i].code === "cn-mee") {
+                    chosen = list[i];
+                    break;
+                }
+            }
+            if (!chosen) {
+                chosen = list[0];
+            }
+            return chosen || null;
+        }
+
+        function loadWeather(latitude, longitude, locationName) {
+            var weatherElement = document.getElementById("weather-info");
+            var forecastElement = document.getElementById("weather-forecast");
+            var locationElement = document.getElementById("weather-location");
+
+            if (!weatherElement) {
+                return;
+            }
+
+            resolvedWeatherLocation = {
+                latitude: latitude,
+                longitude: longitude,
+                name: locationName
+            };
+            lastWeatherFetchAt = Date.now();
+
+            // 和风 v1 的路径参数：纬度在前、经度在后，最多两位小数
+            var coord = Number(latitude).toFixed(2) + "/" + Number(longitude).toFixed(2);
+            var timeout = weatherConfig.requestTimeoutMs;
+            var authInit = { headers: { "X-QW-Api-Key": weatherConfig.qweatherApiKey } };
+
+            var currentRequest = fetchWithTimeout(
+                qweatherUrl("/weather/v1/current/" + coord + "?localTime=true"),
+                timeout, undefined, authInit
+            ).then(function (response) {
+                return response.json();
+            });
+
+            // 每日预报只用于日出日落和降水概率，失败时降级为「暂无数据」，
+            // 不该把整个天气卡片拖成不可用
+            var dailyRequest = fetchWithTimeout(
+                qweatherUrl("/weather/v1/daily/" + coord + "?days=1&localTime=true"),
+                timeout, undefined, authInit
+            ).then(function (response) {
+                return response.json();
+            }).catch(function (error) {
+                console.warn("每日预报获取失败，日出日落与降水概率显示暂无数据", error);
+                return null;
+            });
+
+            // 空气质量是锦上添花，失败不该拖垮整个天气卡片
+            var airRequest = fetchWithTimeout(
+                qweatherUrl("/airquality/v1/current/" + coord),
+                timeout, undefined, authInit
+            ).then(function (response) {
+                return response.json();
+            }).catch(function (error) {
+                console.warn("空气质量获取失败，详情中显示暂无数据", error);
+                return null;
+            });
+
+            Promise.all([currentRequest, dailyRequest, airRequest])
+                .then(function (results) {
+                    var current = results[0];
+                    var daily = results[1];
+                    var air = results[2];
+
+                    // 气温是必填项：拿不到就当作整个请求失败，走兜底文案
+                    var temp = pickValue(current && current.temperature);
+                    if (!isNum(temp)) {
+                        throw new Error("和风天气未返回有效气温");
+                    }
+                    var text = currentWeatherText(current);
+                    var icon = currentWeatherIcon(current);
+
+                    if (locationElement && locationName) {
+                        locationElement.textContent = "⌖ " + locationName;
+                    }
+                    weatherElement.classList.remove("is-muted");
+                    weatherElement.innerHTML =
+                        "<div class=\"weather-main\"><span class=\"weather-icon\">" +
+                        icon + "</span><strong>" +
+                        Math.round(Number(temp)) + "°</strong><span>" +
+                        text + "</span></div>";
+
+                    if (!forecastElement) {
+                        return;
+                    }
+
+                    var day = daily && daily.days ? daily.days[0] : null;
+                    var astro = (day && day.astro) || {};
+                    var pollutants = airQualityMap(air);
+                    var index = airQualityIndex(air);
+
+                    // 实时接口没有降水概率，取今天白天/夜间两者的较大值
+                    var dayProb = day && day.daytime && day.daytime.precipitation
+                        ? Number(day.daytime.precipitation.probability) : null;
+                    var nightProb = day && day.nighttime && day.nighttime.precipitation
+                        ? Number(day.nighttime.precipitation.probability) : null;
+                    var prob = Math.max(
+                        Number.isFinite(dayProb) ? dayProb : 0,
+                        Number.isFinite(nightProb) ? nightProb : 0
+                    );
+
+                    // 湿度、云量、降水概率在和风 v1 里都是 [0,1] 小数
+                    var humidity = pickValue(current.humidity);
+                    var cloudCover = pickValue(current.cloudCover);
+                    var visibility = pickValue(current.visibility);
+                    var feelsLike = pickValue(current.feelsLike);
+                    var pressure = pickValue(current.pressure);
+                    var precipAmount = current.precipitation
+                        ? pickValue(current.precipitation.amount) : null;
+                    var windDegree = current.wind && current.wind.direction
+                        ? current.wind.direction.degree : null;
+                    var windScale = current.wind ? current.wind.scale : null;
+
+                    // 注意 Number(null) 是 0，所以必须先判空再转数字，否则缺字段会显示「北风 null级」
+                    var windText = (windDegree != null && windScale != null)
+                        ? windDirection(Number(windDegree)) + "风 " + windScale + "级"
+                        : "暂无数据";
+
+                    // 空气质量卡片只显示 AQI 与等级，具体污染物浓度统一放下面的「污染物浓度」块
+                    var pm25 = pollutants.pm2p5 || {};
+                    var airText = "暂无数据";
+                    if (index) {
+                        airText = "AQI " + (index.aqiDisplay != null ? index.aqiDisplay : index.aqi) +
+                            (index.category ? " " + index.category : "");
+                    }
+
+                    // 和风要求标注数据来源。attributions 给的是 URL，做成可点链接更友好；
+                    // 但这是外部数据，必须转义后再拼进 innerHTML。
+                    var attributions = (current.metadata && current.metadata.attributions) || [];
+                    var sourceNote = "<div class=\"weather-station-note\">🌤️ 数据来源：";
+                    if (attributions.length) {
+                        sourceNote += attributions.map(function (item) {
+                            var text = String(item);
+                            return /^https?:\/\//.test(text)
+                                ? "<a href=\"" + escapeHtml(text) + "\" target=\"_blank\" rel=\"noopener noreferrer\">和风天气</a>"
+                                : escapeHtml(text);
+                        }).join(" / ");
+                    } else {
+                        sourceNote += "和风天气";
+                    }
+                    sourceNote += "</div>";
+
+                    forecastElement.innerHTML =
+                        "<div class=\"weather-detail-heading\">今日天气详情" +
+                        "<span>" + text + " " + icon + "</span></div>" +
+                        "<div class=\"weather-detail-grid\">" +
+                        "<div class=\"weather-detail-card\"><i>🌬️</i><span><em>风力</em><b>" + windText + "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>👁️</i><span><em>能见度</em><b>" +
+                        (isNum(visibility) ? (Number(visibility) / 1000).toFixed(1) + " km" : "暂无数据") +
+                        "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>🌡️</i><span><em>体感温度</em><b>" +
+                        (isNum(feelsLike) ? Math.round(Number(feelsLike)) + "°" : "暂无数据") +
+                        "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>💧</i><span><em>湿度</em><b>" +
+                        (isNum(humidity) ? Math.round(Number(humidity) * 100) + "%" : "暂无数据") +
+                        "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>⏱️</i><span><em>气压</em><b>" +
+                        (isNum(pressure) ? Math.round(Number(pressure)) + " hPa" : "暂无数据") +
+                        "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>🍃</i><span><em>空气质量</em><b>" + airText + "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>☁️</i><span><em>云量</em><b>" +
+                        (isNum(cloudCover) ? Math.round(Number(cloudCover) * 100) + "%" : "暂无数据") +
+                        "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>☀️</i><span><em>紫外线</em><b>" +
+                        (isNum(current.uvIndex) ? Number(current.uvIndex).toFixed(1) : "暂无数据") +
+                        "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>🌧️</i><span><em>降水量</em><b>" +
+                        (isNum(precipAmount) ? Number(precipAmount).toFixed(1) + " mm" : "暂无数据") +
+                        "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>☔</i><span><em>降水概率</em><b>" +
+                        Math.round(prob * 100) + "%</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>🌅</i><span><em>日出</em><b>" + formatWeatherTime(astro.sunrise) + "</b></span></div>" +
+                        "<div class=\"weather-detail-card\"><i>🌇</i><span><em>日落</em><b>" + formatWeatherTime(astro.sunset) + "</b></span></div>" +
+                        "</div>" +
+                        "<div class=\"air-quality-title\">污染物浓度</div>" +
+                        "<div class=\"pollutant-grid\">" +
+                        "<span><i>PM2.5</i><b>" + formatAirValue(pm25.value, pm25.unit) + "</b></span>" +
+                        "<span><i>PM10</i><b>" + formatAirValue((pollutants.pm10 || {}).value, (pollutants.pm10 || {}).unit) + "</b></span>" +
+                        "<span><i>O₃</i><b>" + formatAirValue((pollutants.o3 || {}).value, (pollutants.o3 || {}).unit) + "</b></span>" +
+                        "<span><i>NO₂</i><b>" + formatAirValue((pollutants.no2 || {}).value, (pollutants.no2 || {}).unit) + "</b></span>" +
+                        "<span><i>SO₂</i><b>" + formatAirValue((pollutants.so2 || {}).value, (pollutants.so2 || {}).unit) + "</b></span>" +
+                        "<span><i>CO</i><b>" + formatAirValue((pollutants.co || {}).value, (pollutants.co || {}).unit) + "</b></span>" +
+                        "</div>" +
+                        sourceNote;
+                })
+                .catch(function (error) {
+                    console.error(error);
+                    weatherElement.textContent = "天气暂时无法获取";
+                    weatherElement.classList.add("is-muted");
+                });
+        }
+
+        // 带超时的 fetch：定位类接口偶尔会挂住不返回，没有超时页面会永远停在「正在定位...」
+        // deadlineMs 是调用方给的剩余总时限，取它和 requestTimeoutMs 的较小值，
+        // 保证整条回退链不会因为多个源逐个超时而越拖越久。
+        // init 用于附加请求头（和风的 X-QW-Api-Key 必须走头，不能用查询参数）。
+        function fetchWithTimeout(url, timeoutMs, deadlineMs, init) {
+            var limit = timeoutMs || weatherConfig.requestTimeoutMs;
+            if (typeof deadlineMs === "number" && deadlineMs < limit) {
+                limit = deadlineMs;
+            }
+            if (limit <= 0) {
+                return Promise.reject(new Error("定位总时限已到，跳过：" + url));
+            }
+
+            var controller = new AbortController();
+            var timer = window.setTimeout(function () {
+                controller.abort();
+            }, limit);
+
+            var options = init || {};
+            options.signal = controller.signal;
+
+            return fetch(url, options).then(function (response) {
+                window.clearTimeout(timer);
+                if (!response.ok) {
+                    throw new Error("请求失败 " + response.status + "：" + url);
+                }
+                return response;
+            }, function (error) {
+                window.clearTimeout(timer);
+                throw error;
+            });
+        }
+
+        // 两点间大圆距离（公里），用于判断浏览器定位有没有跑偏
+        function haversineKm(lat1, lon1, lat2, lon2) {
+            var toRad = function (deg) {
+                return deg * Math.PI / 180;
+            };
+            var dLat = toRad(lat2 - lat1);
+            var dLon = toRad(lon2 - lon1);
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        // 兜底城市：所有定位手段都失败（或 fixed 模式）时使用
+        function loadFallbackWeatherLocation() {
+            loadWeather(weatherConfig.fallbackLatitude,
+                weatherConfig.fallbackLongitude,
+                weatherConfig.fallbackCity);
+        }
+
+        function showWeatherUnavailable() {
+            var weatherElement = document.getElementById("weather-info");
+            if (weatherElement) {
+                weatherElement.textContent = "天气暂时无法获取";
+                weatherElement.classList.add("is-muted");
+            }
+        }
+
+        // 把 IP 库的地址串统一成「省市区」：
+        //   「中国河北省保定市涞源县」→「河北省保定市涞源县」
+        //   「河北省保定市 联通」      →「河北省保定市」（pconline 会把 ISP 拼在后面）
+        function pickCityName(address) {
+            var name = String(address || "").replace(/^中国/, "").trim();
+            name = name.split(/\s+/)[0];
+            return name.replace(/(联通|移动|电信|铁通|广电|教育网|鹏博士)$/, "");
+        }
+
+        // 各 IP 定位源返回结构不同，统一归一化成 { latitude, longitude, name }
+        // 返回 null 表示该源不可用，继续尝试下一个源
+        function parseIpLocation(sourceIndex, data) {
+            if (!data) {
+                return null;
+            }
+
+            // 源 0：v2.xxapi.cn
+            if (sourceIndex === 0) {
+                var loc = data.data;
+                var lat = loc && Number(loc.lat);
+                var lng = loc && Number(loc.lng);
+                if (data.code !== 200 || !loc ||
+                    !Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    return null;
+                }
+                return { latitude: lat, longitude: lng, name: pickCityName(loc.address) };
+            }
+
+            // 源 1：whois.pconline.com.cn（GBK 返回，靠 fetch 的 charset 自动解码）
+            if (sourceIndex === 1) {
+                var lat2 = Number(data.lat);
+                var lng2 = Number(data.lng);
+                if (!Number.isFinite(lat2) || !Number.isFinite(lng2)) {
+                    return null;
+                }
+                var name = pickCityName(data.addr) ||
+                    [data.pro, data.city].filter(Boolean).join("");
+                return { latitude: lat2, longitude: lng2, name: name };
+            }
+
+            return null;
+        }
+
+        // 依次尝试各个 IP 定位源；成功一个就立刻用，全部失败才回退兜底城市。
+        // 整条链共享 locationDeadlineMs 总时限，防止逐个超时把等待时间越拖越长。
+        function loadLocalWeather() {
+            var apis = weatherConfig.ipApis || [];
+            var deadline = Date.now() + weatherConfig.locationDeadlineMs;
+            var index = 0;
+
+            function tryNext() {
+                var remaining = deadline - Date.now();
+                if (index >= apis.length || remaining <= 0) {
+                    console.warn("IP 定位源均不可用，回退到兜底城市");
+                    loadFallbackWeatherLocation();
+                    return;
+                }
+
+                var current = index++;
+                fetchWithTimeout(apis[current], remaining, remaining)
+                    .then(function (response) {
+                        return response.json();
+                    })
+                    .then(function (data) {
+                        var result = parseIpLocation(current, data);
+                        if (!result) {
+                            throw new Error("IP 定位源返回内容无效：" + apis[current]);
+                        }
+                        loadWeather(result.latitude, result.longitude,
+                            result.name || "当前位置");
+                    })
+                    .catch(function (error) {
+                        console.warn(error);
+                        tryNext();
+                    });
+            }
+
+            tryNext();
+        }
+
+        function loadBrowserWeather() {
+            if (!navigator.geolocation) {
+                loadLocalWeather();
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(function (position) {
+                var latitude = position.coords.latitude;
+                var longitude = position.coords.longitude;
+
+                // 电脑端的「GPS」其实是 WiFi 定位库，经常偏到隔壁市，用距离做一次兜底校验
+                var drift = haversineKm(latitude, longitude,
+                    weatherConfig.fallbackLatitude, weatherConfig.fallbackLongitude);
+                if (Number.isFinite(drift) && drift > weatherConfig.maxAutoDistanceKm) {
+                    console.warn("浏览器定位偏离兜底城市 " + Math.round(drift) + " km，已忽略");
+                    loadLocalWeather();
+                    return;
+                }
+
+                // 地名仅用于显示；取数始终用定位坐标本身，不做地名反查
+                loadWeather(latitude, longitude, weatherConfig.fallbackCity);
+            }, function () {
+                loadLocalWeather();
+            }, {
+                enableHighAccuracy: true,
+                timeout: 12000,
+                maximumAge: 300000
+            });
+        }
+
+        // 按配置选择定位方式：auto（默认，定位访客所在地）/ fixed（永远用兜底坐标）
+        function initWeather() {
+            if (weatherConfig.locationMode === "fixed") {
+                loadFallbackWeatherLocation();
+                return;
+            }
+
+            loadBrowserWeather();
+        }
+
+        // 定时刷新，避免页面挂久了显示的还是几小时前的数据
+        function refreshWeather() {
+            if (!resolvedWeatherLocation) {
+                return;
+            }
+
+            loadWeather(resolvedWeatherLocation.latitude,
+                resolvedWeatherLocation.longitude,
+                resolvedWeatherLocation.name);
+        }
+
+        function isWeatherStale() {
+            return Date.now() - lastWeatherFetchAt >=
+                weatherConfig.refreshIntervalMinutes * 60 * 1000;
+        }
+
+        function escapeHtml(text) {
+            return String(text).replace(/[&<>"']/g, function (ch) {
+                return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[ch];
+            });
+        }
+
+        function setCookie(name, value, days) {
+            var expires = "";
+            if (days) {
+                var date = new Date();
+                date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + value + expires + "; path=/";
+        }
+
+        function getCookie(name) {
+            var nameEQ = name + "=";
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i];
+                while (cookie.charAt(0) == ' ') {
+                    cookie = cookie.substring(1, cookie.length);
+                }
+                if (cookie.indexOf(nameEQ) == 0) {
+                    return cookie.substring(nameEQ.length, cookie.length);
+                }
+            }
+            return null;
+        }
+
+        /* ============================ 启动 ============================ */
+
+        // 注：主题恢复已在 <head> 里提前执行（避免白屏闪烁），这里不再重复。
+
+        updateLocalTime();
+        window.setInterval(updateLocalTime, 1000);
+        initWeather();
+
+        window.setInterval(function () {
+            if (document.visibilityState === "visible" && isWeatherStale()) {
+                refreshWeather();
+            }
+        }, 60 * 1000);
+
+        document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "visible" && isWeatherStale()) {
+                refreshWeather();
+            }
+        });
+
+        // 天气详情展开 / 折叠
+        var weatherToggle = document.getElementById("weather-toggle");
+        var weatherForecast = document.getElementById("weather-forecast");
+        if (weatherToggle && weatherForecast) {
+            weatherForecast.classList.add("weather-forecast-collapsed");
+            weatherToggle.setAttribute("aria-expanded", "false");
+            weatherToggle.addEventListener("click", function () {
+                var expanded = weatherToggle.getAttribute("aria-expanded") === "true";
+                weatherToggle.setAttribute("aria-expanded", String(!expanded));
+                weatherForecast.classList.toggle("weather-forecast-collapsed", expanded);
+            });
+        }
+
+        // 明暗主题切换（与原站一致：写 cookie themeState，下次打开记住选择）
+        var demoToggle = document.getElementById("demo-theme-toggle");
+        var demoIcon = document.getElementById("demo-theme-icon");
+        var demoLabel = document.getElementById("demo-theme-label");
+
+        function syncDemoThemeButton() {
+            var isDark = document.documentElement.dataset.theme === "Dark";
+            demoIcon.textContent = isDark ? "☀️" : "🌙";
+            demoLabel.textContent = isDark ? "亮色" : "暗色";
+        }
+
+        if (demoToggle) {
+            demoToggle.addEventListener("click", function () {
+                var next = document.documentElement.dataset.theme === "Dark" ? "Light" : "Dark";
+                document.documentElement.dataset.theme = next;
+                setCookie("themeState", next, 365);
+                // file:// 下 cookie 不可用，再写一份 localStorage 保证刷新后不丢
+                try { window.localStorage.setItem("themeState", next); } catch (e) { }
+                syncDemoThemeButton();
+            });
+        }
+
+        syncDemoThemeButton();
+    </script>
+</body>
+
+</html>
